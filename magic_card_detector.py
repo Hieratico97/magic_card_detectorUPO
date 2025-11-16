@@ -12,6 +12,7 @@ import io
 import base64
 import pickle
 import argparse
+import imagehash 
 from copy import deepcopy
 from itertools import product
 from dataclasses import dataclass
@@ -613,7 +614,7 @@ class MagicCardDetector:
         self.verbose = False
         self.visual = False
 
-        self.hash_separation_thr = 4.
+        self.hash_separation_thr = 2.
         self.thr_lvl = 70
 
         self.clahe = cv2.createCLAHE(clipLimit=2.0,
@@ -817,11 +818,10 @@ class MagicCardDetector:
         return diff
 
     def phash_compare(self, im_seg):
-        """
-        Runs perceptive hash comparison between given image and
-        the (pre-hashed) reference set.
-        """
-
+      
+        print(f"  [DEBUG] Iniciando phash_compare para segmento de imagen")
+        print(f"  [DEBUG] Tamaño del segmento: {im_seg.shape}")
+        
         card_name = 'unknown'
         is_recognized = False
         recognition_score = 0.
@@ -829,31 +829,71 @@ class MagicCardDetector:
 
         d_0_dist = np.zeros(len(rotations))
         d_0 = np.zeros((len(self.reference_images), len(rotations)))
+        
         for j, rot in enumerate(rotations):
-            if not -1.e-5 < rot < 1.e-5:
-                phash_im = imagehash.phash(
-                    PILImage.fromarray(np.uint8(255 * cv2.cvtColor(
-                        rotate(im_seg, rot), cv2.COLOR_BGR2RGB))),
-                    hash_size=16)
-            else:
-                phash_im = imagehash.phash(
-                    PILImage.fromarray(np.uint8(255 * cv2.cvtColor(
-                        im_seg, cv2.COLOR_BGR2RGB))),
-                    hash_size=16)
-            d_0[:, j] = self.phash_diff(phash_im)
-            d_0_ = d_0[d_0[:, j] > np.amin(d_0[:, j]), j]
-            d_0_ave = np.average(d_0_)
-            d_0_std = np.std(d_0_)
-            d_0_dist[j] = (d_0_ave - np.amin(d_0[:, j])) / d_0_std
-            if self.verbose:
-                print('Phash statistical distance: ' + str(d_0_dist[j]))
-            if (d_0_dist[j] > self.hash_separation_thr and
-                    np.argmax(d_0_dist) == j):
-                card_name = self.reference_images[np.argmin(d_0[:, j])]\
-                    .name.split('.jpg')[0]
-                is_recognized = True
-                recognition_score = d_0_dist[j] / self.hash_separation_thr
-                break
+            try:
+                if not -1.e-5 < rot < 1.e-5:
+                    rotated_img = rotate(im_seg, rot)
+                    phash_im = imagehash.phash(
+                        PILImage.fromarray(np.uint8(255 * cv2.cvtColor(
+                            rotated_img, cv2.COLOR_BGR2RGB))),
+                        hash_size=16)
+                else:
+                    phash_im = imagehash.phash(
+                        PILImage.fromarray(np.uint8(255 * cv2.cvtColor(
+                            im_seg, cv2.COLOR_BGR2RGB))),
+                        hash_size=16)
+                
+                d_0[:, j] = self.phash_diff(phash_im)
+                
+                # === DIAGNÓSTICO DETALLADO ===
+                min_distance = np.amin(d_0[:, j])
+                best_match_index = np.argmin(d_0[:, j])
+                best_match_name = self.reference_images[best_match_index].name
+                
+                print(f"  [DEBUG] Rotación {rot}°:")
+                print(f"    - Mejor match: '{best_match_name}'")
+                print(f"    - Distancia: {min_distance}")
+                print(f"    - Umbral requerido: {self.hash_separation_thr}")
+                
+                # Mostrar los 5 mejores matches
+                sorted_indices = np.argsort(d_0[:, j])
+                print(f"    - Top 5 matches:")
+                for idx in sorted_indices[:5]:
+                    card_name_temp = self.reference_images[idx].name
+                    distance = d_0[idx, j]
+                    print(f"      {distance:.1f} - {card_name_temp}")
+                # === FIN DIAGNÓSTICO ===
+                
+                # Calcular distancia estadística
+                d_0_ = d_0[d_0[:, j] > np.amin(d_0[:, j]), j]
+                if len(d_0_) > 0 and np.std(d_0_) > 0:
+                    d_0_ave = np.average(d_0_)
+                    d_0_std = np.std(d_0_)
+                    d_0_dist[j] = (d_0_ave - np.amin(d_0[:, j])) / d_0_std
+                else:
+                    d_0_dist[j] = 0
+                    
+                print(f"    - Distancia estadística: {d_0_dist[j]:.2f}")
+                    
+                if (d_0_dist[j] > self.hash_separation_thr and
+                        np.argmax(d_0_dist) == j):
+                    card_name = self.reference_images[np.argmin(d_0[:, j])].name.split('.jpg')[0]
+                    is_recognized = True
+                    recognition_score = d_0_dist[j] / self.hash_separation_thr
+                    print(f"  [DEBUG] ¡RECONOCIDO! '{card_name}' con score: {recognition_score:.2f}")
+                    break
+                    
+            except Exception as e:
+                print(f"  [ERROR] En rotación {rot}°: {e}")
+                continue
+
+        if not is_recognized:
+            best_overall_distance = np.amin(d_0) if d_0.size > 0 else float('inf')
+            print(f"  [DEBUG] No se reconoció ninguna carta.")
+            print(f"  [DEBUG] Mejor distancia global: {best_overall_distance}")
+            print(f"  [DEBUG] Mejor distancia estadística: {np.max(d_0_dist):.2f}")
+            
         return (is_recognized, recognition_score, card_name)
 
     def recognize_segment(self, image_segment):
@@ -990,7 +1030,80 @@ class MagicCardDetector:
         # Final fragment detection
         test_image.mark_fragments()
         print('Done.')
-
+    def read_reference_data_from_db(self, db_path):
+        """
+        Reads pre-calculated hashes from SQLite database instead of pickle file.
+        """
+        import sqlite3
+        print(f'Reading reference data from database: {db_path}')
+        
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Verificar que la tabla existe
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='cards'")
+            if not cursor.fetchone():
+                print("ERROR: Table 'cards' does not exist!")
+                conn.close()
+                return
+            
+            # Obtener todas las columnas
+            cursor.execute("PRAGMA table_info(cards)")
+            columns_info = cursor.fetchall()
+            column_names = [col[1] for col in columns_info]
+            print(f"Columnas disponibles: {column_names}")
+            
+            # Verificar el número total de filas
+            cursor.execute("SELECT COUNT(*) FROM cards")
+            total_rows = cursor.fetchone()[0]
+            print(f"Total de filas en la tabla: {total_rows}")
+            
+            # Verificar el número de filas con phash no nulo
+            cursor.execute("SELECT COUNT(*) FROM cards WHERE phash IS NOT NULL AND phash != ''")
+            rows_with_phash = cursor.fetchone()[0]
+            print(f"Filas con phash no nulo: {rows_with_phash}")
+            
+            # Si no hay filas con phash, intentar una consulta más simple
+            if rows_with_phash == 0:
+                print("No hay hashes en la base de datos. Verificando si hay alguna fila...")
+                cursor.execute("SELECT * FROM cards LIMIT 5")
+                sample_rows = cursor.fetchall()
+                print(f"Filas de ejemplo: {sample_rows}")
+                conn.close()
+                return
+            
+            # Consulta para obtener los hashes
+            query = 'SELECT name, phash FROM cards WHERE phash IS NOT NULL AND phash != ""'
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            
+            print(f"Filas encontradas con la consulta: {len(rows)}")
+            
+            # Procesar las filas
+            loaded_count = 0
+            for row in rows:
+                name = row[0]
+                phash_str = row[1]
+                
+                if phash_str and phash_str != 'None':
+                    try:
+                        ref_image = ReferenceImage(str(name), None, self.clahe)
+                        ref_image.phash = imagehash.hex_to_hash(str(phash_str))
+                        self.reference_images.append(ref_image)
+                        loaded_count += 1
+                    except Exception as e:
+                        print(f"Error procesando {name}: {e}")
+                        continue
+            
+            conn.close()
+            print(f'Done. Loaded {loaded_count} reference cards from database.')
+            
+        except Exception as e:
+            print(f"Error reading database: {e}")
+            import traceback
+            traceback.print_exc()
+    
 
 def main():
     """
