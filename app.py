@@ -9,7 +9,7 @@ from magic_card_detector import MagicCardDetector
 
 # --- Configuration ---
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
-REFERENCE_DB_FILE = 'scryfall_db.sqlite'  # Cambiado para usar SQLite
+REFERENCE_DB_FILE = 'Script_DB/scryfall_db.sqlite'  # Cambiado para usar SQLite
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
@@ -46,7 +46,20 @@ def load_reference_data():
     
     print("ERROR: No reference data found!")
     return False
-
+def preprocess_image(image_cv):
+    """Mejora la calidad de la imagen para mejor reconocimiento"""
+    # Aumentar contraste
+    lab = cv2.cvtColor(image_cv, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+    l = clahe.apply(l)
+    lab = cv2.merge([l, a, b])
+    image_cv = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+    
+    # Reducir ruido
+    image_cv = cv2.medianBlur(image_cv, 3)
+    
+    return image_cv
 # Cargar datos de referencia
 if not load_reference_data():
     detector = None  # Deshabilitar detector si no hay datos de referencia
@@ -85,7 +98,7 @@ def upload_image():
             filestr = file.read()
             npimg = np.frombuffer(filestr, np.uint8)
             img_cv = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
-
+            
             if img_cv is None:
                  flash('Could not decode image. Please upload a valid image file (JPG, PNG).', 'error')
                  return redirect(url_for('index'))
