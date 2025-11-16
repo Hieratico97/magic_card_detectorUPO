@@ -9,7 +9,7 @@ from magic_card_detector import MagicCardDetector
 
 # --- Configuration ---
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
-REFERENCE_HASH_FILE = 'alpha_reference_phash.dat'
+REFERENCE_DB_FILE = 'scryfall_db.sqlite'  # Cambiado para usar SQLite
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
@@ -18,16 +18,38 @@ app.secret_key = 'your secret key here' # TBD
 # --- Load MagicCardDetector ONCE ---
 print("Initializing Magic Card Detector...")
 detector = MagicCardDetector()
-try:
-    detector.read_prehashed_reference_data(REFERENCE_HASH_FILE)
-    print(f"Successfully loaded reference data from {REFERENCE_HASH_FILE}")
-except FileNotFoundError:
-    print(f"ERROR: Reference hash file '{REFERENCE_HASH_FILE}' not found!")
-    print("The detector will not be able to recognize cards.")
-    detector = None # Disable detector if reference data fails
-except Exception as e:
-    print(f"ERROR loading reference data: {e}")
-    detector = None
+
+def load_reference_data():
+    """
+    Intenta cargar los datos de referencia desde SQLite, 
+    si no existe, usa el archivo pickle como fallback
+    """
+    # Primero intenta con la base de datos SQLite
+    if os.path.exists(REFERENCE_DB_FILE):
+        try:
+            detector.read_reference_data_from_db(REFERENCE_DB_FILE)
+            print(f"Successfully loaded reference data from {REFERENCE_DB_FILE}")
+            return True
+        except Exception as e:
+            print(f"Error loading from SQLite database: {e}")
+            print("Falling back to pickle file...")
+    
+    # Fallback al archivo pickle
+    pickle_file = 'alpha_reference_phash.dat'
+    if os.path.exists(pickle_file):
+        try:
+            detector.read_prehashed_reference_data(pickle_file)
+            print(f"Successfully loaded reference data from {pickle_file}")
+            return True
+        except Exception as e:
+            print(f"Error loading from pickle file: {e}")
+    
+    print("ERROR: No reference data found!")
+    return False
+
+# Cargar datos de referencia
+if not load_reference_data():
+    detector = None  # Deshabilitar detector si no hay datos de referencia
 
 # --- Helper Function ---
 def allowed_file(filename):
