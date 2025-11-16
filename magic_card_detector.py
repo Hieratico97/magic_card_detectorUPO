@@ -429,7 +429,7 @@ class ReferenceImage:
         self.phash = imagehash.phash(
             PILImage.fromarray(np.uint8(255 * cv2.cvtColor(
                 self.adjusted, cv2.COLOR_BGR2RGB))),
-            hash_size=32)
+            hash_size=16)
 
     def histogram_adjust(self):
         """
@@ -834,12 +834,12 @@ class MagicCardDetector:
                 phash_im = imagehash.phash(
                     PILImage.fromarray(np.uint8(255 * cv2.cvtColor(
                         rotate(im_seg, rot), cv2.COLOR_BGR2RGB))),
-                    hash_size=32)
+                    hash_size=16)
             else:
                 phash_im = imagehash.phash(
                     PILImage.fromarray(np.uint8(255 * cv2.cvtColor(
                         im_seg, cv2.COLOR_BGR2RGB))),
-                    hash_size=32)
+                    hash_size=16)
             d_0[:, j] = self.phash_diff(phash_im)
             d_0_ = d_0[d_0[:, j] > np.amin(d_0[:, j]), j]
             d_0_ave = np.average(d_0_)
