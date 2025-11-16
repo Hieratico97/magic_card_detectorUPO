@@ -1031,7 +1031,7 @@ def main():
     # Read the reference and test data sets
     # card_detector.read_and_adjust_reference_images(
     #     '../../MTG/Card_Images/LEA/')
-    card_detector.read_prehashed_reference_data(args.phash)
+    card_detector.read_reference_data_from_db('scryfall_db.sqlite')
     card_detector.read_and_adjust_test_images(args.input_path)
 
     if do_profile:
