@@ -1,131 +1,402 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light"> <!-- data-theme can be light or dark -->
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MTG Card Detector</title>
-    <!-- Pico.css CDN Link -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
-    <!-- Custom Styles -->
+    <title>MTG Vision Scanner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Cinzel:wght@700&display=swap" rel="stylesheet">
+    
     <style>
+        :root {
+            --primary: #b79d5b; 
+            --primary-hover: #d4bd76;
+            --bg-dark: #121212;
+            --glass: rgba(30, 30, 30, 0.75);
+            --border: rgba(255, 255, 255, 0.1);
+            --text: #e0e0e0;
+            --mana-glow: #00e5ff; /* Cian eléctrico */
+            --card-width: 120px;
+            --card-height: 170px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            padding-top: 2rem;
-            padding-bottom: 2rem;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
         }
-        main.container {
-            max-width: 768px; /* Limit width for better readability */
+
+        /* --- FONDO (RUEDA) --- */
+        .background-wheel-container {
+            position: absolute;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: -1;
+            overflow: hidden;
+            opacity: 0.5; /* Más visible para que se vea durante la carga */
         }
-        h1 {
-            text-align: center;
-            margin-bottom: 1.5rem;
+
+        .card-wheel {
+            position: relative;
+            width: 0;
+            height: 0;
+            animation: spin 80s linear infinite;
         }
-        form {
-            margin-top: 2rem;
-            margin-bottom: 2rem;
-            padding: 1.5rem;
-            border: 1px solid var(--pico-card-border-color);
-            border-radius: var(--pico-card-border-radius);
-            background-color: var(--pico-card-background-color);
-            box-shadow: var(--pico-card-box-shadow);
+
+        .bg-card {
+            position: absolute;
+            width: var(--card-width);
+            height: var(--card-height);
+            background: linear-gradient(135deg, #3e2723 0%, #5d4037 100%);
+            border-radius: 8px;
+            border: 2px solid #1a1a1a;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transform-origin: center center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
-        /* Style file input button */
-        input[type="file"] {
-            border: none; /* Pico adds a border we might not want */
+
+        .bg-card::after {
+            content: '';
+            width: 80%;
+            height: 85%;
+            border: 1px solid rgba(183, 157, 91, 0.3);
+            border-radius: 4px;
+            background: radial-gradient(circle, rgba(183,157,91,0.1) 0%, rgba(0,0,0,0.2) 100%);
         }
-        input[type="file"]::file-selector-button {
-            /* Inherit button styles from Pico */
-            background-color: var(--pico-primary);
-            border: 1px solid var(--pico-primary);
-            border-radius: var(--pico-border-radius);
-            color: var(--pico-primary-inverse);
-            padding: 0.5rem 1rem;
-            cursor: pointer;
-            transition: background-color var(--pico-transition), border-color var(--pico-transition), color var(--pico-transition), box-shadow var(--pico-transition);
-            margin-right: 1rem; /* Space between button and text */
-        }
-        input[type="file"]::file-selector-button:hover {
-             background-color: var(--pico-primary-hover);
-             border-color: var(--pico-primary-hover);
-        }
-        /* Centered Loader */
-        .loader {
-            display: none; /* Hidden by default */
-            margin: 3rem auto; /* More space */
-            width: 50px;
-            aspect-ratio: 1;
-            border-radius: 50%;
-            border: 8px solid var(--pico-secondary-background);
-            border-right-color: var(--pico-primary); /* Use Pico primary color */
-            animation: spin 1s infinite linear;
-        }
+
+        /* Posicionamiento circular */
+        .bg-card:nth-child(1) { transform: rotate(0deg) translateY(-350px); }
+        .bg-card:nth-child(2) { transform: rotate(30deg) translateY(-350px); }
+        .bg-card:nth-child(3) { transform: rotate(60deg) translateY(-350px); }
+        .bg-card:nth-child(4) { transform: rotate(90deg) translateY(-350px); }
+        .bg-card:nth-child(5) { transform: rotate(120deg) translateY(-350px); }
+        .bg-card:nth-child(6) { transform: rotate(150deg) translateY(-350px); }
+        .bg-card:nth-child(7) { transform: rotate(180deg) translateY(-350px); }
+        .bg-card:nth-child(8) { transform: rotate(210deg) translateY(-350px); }
+        .bg-card:nth-child(9) { transform: rotate(240deg) translateY(-350px); }
+        .bg-card:nth-child(10) { transform: rotate(270deg) translateY(-350px); }
+        .bg-card:nth-child(11) { transform: rotate(300deg) translateY(-350px); }
+        .bg-card:nth-child(12) { transform: rotate(330deg) translateY(-350px); }
+
         @keyframes spin {
-            to { transform: rotate(1turn); }
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
-        /* Error message styling */
-        .error-message {
-            color: var(--pico-color-red); /* Pico variable for red */
-            background-color: var(--pico-background-red); /* Pico variable for light red background */
-            border: 1px solid var(--pico-border-red); /* Pico variable for red border */
-            padding: 1rem;
-            border-radius: var(--pico-border-radius);
-            margin-bottom: 1.5rem;
+
+        /* --- INTERFAZ PRINCIPAL --- */
+        .main-container {
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 3rem;
+            width: 100%;
+            max-width: 500px;
             text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+            z-index: 10;
+            transition: opacity 0.5s ease;
+        }
+
+        h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(to right, #fff, #b79d5b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p.subtitle { color: #888; margin-bottom: 2rem; font-size: 0.9rem; }
+
+        /* --- CORRECCIÓN: ÁREA DE SUBIDA CENTRADA --- */
+        .upload-area {
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            padding: 1rem; /* Menos padding interno para dejar espacio a la imagen */
+            height: 300px; /* Altura fija para mantener consistencia */
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            background: rgba(0,0,0,0.2);
+            overflow: hidden;
+            
+            /* FLEXBOX MAGIA PARA CENTRAR */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .upload-area:hover { border-color: var(--primary); background: rgba(183, 157, 91, 0.05); }
+
+        .upload-icon { font-size: 3rem; color: var(--primary); margin-bottom: 1rem; }
+        
+        .file-input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 2;}
+        
+        /* Imagen centrada y contenida */
+        .preview-image { 
+            display: none; 
+            max-width: 100%; 
+            max-height: 100%; 
+            width: auto;
+            height: auto;
+            border-radius: 8px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5); 
+            object-fit: contain;
+            z-index: 1;
+        }
+
+        .placeholder-content {
+            text-align: center;
+            z-index: 1;
+        }
+
+        .btn {
+            background: var(--primary);
+            color: #000;
+            font-weight: 800;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 1rem;
+            margin-top: 1.5rem;
+            transition: transform 0.2s, background 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .btn:hover { background: var(--primary-hover); transform: translateY(-2px); }
+        .btn:disabled { background: #555; cursor: not-allowed; transform: none; }
+
+        .flash-messages {
+            margin-bottom: 1rem; padding: 10px; border-radius: 8px;
+            background: rgba(255, 80, 80, 0.2); border: 1px solid rgba(255, 80, 80, 0.4);
+            color: #ffaaaa; font-size: 0.9rem; display: none;
+        }
+
+        /* --- PANTALLA DE CARGA PROFESIONAL --- */
+        .loading-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            
+            /* Fondo semi-transparente para ver la rueda detrás */
+            background: rgba(0, 0, 0, 0.7); 
+            backdrop-filter: blur(3px); /* Blur ligero, elegante */
+            
+            z-index: 20;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        .loading-overlay.active { opacity: 1; pointer-events: all; }
+
+        /* Barra de carga (Sleek Style) */
+        .mana-bar-container {
+            width: 60%; /* Más ancha */
+            max-width: 600px;
+            height: 4px; /* Muy fina y elegante */
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            margin-top: 3rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mana-bar-fill {
+            height: 100%;
+            width: 0%; 
+            background: var(--mana-glow);
+            box-shadow: 0 0 15px var(--mana-glow), 0 0 30px var(--mana-glow); /* Resplandor intenso */
+            transition: width 0.2s ease-out; 
+            border-radius: 2px;
+        }
+
+        .rpg-text {
+            font-family: 'Cinzel', serif;
+            font-size: 1.4rem; /* Texto más grande */
+            color: #fff;
+            margin-top: 1.5rem;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .rpg-text.visible { opacity: 1; }
+
+        @media (max-width: 600px) {
+            .bg-card { width: 80px; height: 115px; }
+            .bg-card:nth-child(n) { transform: rotate(calc(30deg * var(--i))) translateY(-180px); }
         }
     </style>
 </head>
 <body>
-    <main class="container">
-        <header>
-            <h1>Upload Image for MTG Card Detection</h1>
-            <p style="text-align: center;">Upload an image containing Magic: The Gathering cards, and the service will attempt to identify them.</p>
-        </header>
 
-        {% if error %}
-            <!-- Use Pico's article element for alerts/errors -->
-            <article class="error-message" aria-invalid="true">
-                <strong>Error:</strong> {{ error }}
-            </article>
-        {% endif %}
+    <div class="background-wheel-container">
+        <div class="card-wheel" id="cardWheel">
+            <div class="bg-card"></div><div class="bg-card"></div>
+            <div class="bg-card"></div><div class="bg-card"></div>
+            <div class="bg-card"></div><div class="bg-card"></div>
+            <div class="bg-card"></div><div class="bg-card"></div>
+            <div class="bg-card"></div><div class="bg-card"></div>
+            <div class="bg-card"></div><div class="bg-card"></div>
+        </div>
+    </div>
 
-        <form method="post" action="/upload" enctype="multipart/form-data" id="upload-form">
-            <label for="image_file">
-                Choose Image File
-                <input type="file" id="image_file" name="image_file" accept="image/jpeg, image/png, image/jpg" required>
-            </label>
-            <button type="submit" aria-busy="false">Upload and Detect</button>
+    <div class="main-container" id="mainForm">
+        <h1>MTG Vision</h1>
+        <p class="subtitle">AI-Powered Card Scanner & Identifier</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-messages" style="display: block;">
+              {% for category, message in messages %}
+                {{ message }}
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        <form action="/upload" method="post" enctype="multipart/form-data" id="uploadForm">
+            <div class="upload-area" id="dropZone">
+                <input type="file" name="image_file" class="file-input" id="fileInput" accept=".png, .jpg, .jpeg">
+                
+                <div id="placeholderContent" class="placeholder-content">
+                    <div class="upload-icon">⚡</div>
+                    <h3>Upload Image</h3>
+                    <p style="font-size: 0.8rem; opacity: 0.7;">Drag & drop or click to browse</p>
+                </div>
+                
+                <img id="imagePreview" class="preview-image" alt="Preview">
+            </div>
+            <button type="submit" class="btn" id="submitBtn" disabled>Identify Card</button>
         </form>
+    </div>
 
-        <!-- Loading Spinner -->
-        <div id="loading-spinner" class="loader" aria-label="Loading"></div>
-
-    </main> <!-- ./container -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="rpg-text" id="rpgText">Initializing...</div>
+        
+        <div class="mana-bar-container">
+            <div class="mana-bar-fill" id="manaBar"></div>
+        </div>
+    </div>
 
     <script>
-        const uploadForm = document.getElementById('upload-form');
-        const submitButton = uploadForm.querySelector('button[type="submit"]');
-        const loadingSpinner = document.getElementById('loading-spinner');
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+        const preview = document.getElementById('imagePreview');
+        const placeholder = document.getElementById('placeholderContent');
+        const submitBtn = document.getElementById('submitBtn');
+        const uploadForm = document.getElementById('uploadForm');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const manaBar = document.getElementById('manaBar');
+        const rpgText = document.getElementById('rpgText');
+        const mainForm = document.getElementById('mainForm');
 
-        uploadForm.addEventListener('submit', function(event) {
-            // Prevent double submissions
-            if (submitButton.getAttribute('aria-busy') === 'true') {
-                event.preventDefault();
-                return;
-            }
-            // Show loading state
-            loadingSpinner.style.display = 'block';
-            submitButton.setAttribute('aria-busy', 'true');
-            submitButton.textContent = 'Processing...'; // Change button text
+        const phrases = [
+            "Consultando el Oráculo de Delfos...",
+            "Barajando la biblioteca de Alejandría...",
+            "Invocando espíritus de visión...",
+            "Descifrando runas pirexianas...",
+            "Preguntando en tabernas locales...",
+            "Analizando patrones de maná...",
+            "Leyendo pergaminos antiguos...",
+            "Sintonizando con el multiverso..."
+        ];
+
+        // Drag & Drop
+        ['dragenter', 'dragover'].forEach(e => dropZone.addEventListener(e, (ev) => { ev.preventDefault(); dropZone.classList.add('dragover'); }));
+        ['dragleave', 'drop'].forEach(e => dropZone.addEventListener(e, (ev) => { ev.preventDefault(); dropZone.classList.remove('dragover'); }));
+        dropZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            fileInput.files = dt.files;
+            handleFiles(dt.files);
         });
+        fileInput.addEventListener('change', function() { handleFiles(this.files); });
 
-        // Optional: Reset button state if user navigates back
-        window.addEventListener('pageshow', function(event) {
-             if (event.persisted) { // Check if page was loaded from cache
-                loadingSpinner.style.display = 'none';
-                submitButton.setAttribute('aria-busy', 'false');
-                submitButton.textContent = 'Upload and Detect';
-                // Reset file input if possible (browser security often prevents this)
-                // uploadForm.reset();
-             }
+        function handleFiles(files) {
+            if (files.length > 0) {
+                const file = files[0];
+                if (!file.type.startsWith('image/')) return;
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                    placeholder.style.display = 'none';
+                    submitBtn.disabled = false;
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function updateManaBar(progress) {
+            manaBar.style.width = progress + '%';
+        }
+
+        function simulateLoading() {
+            let progress = 0;
+            // Lógica de barra de carga dinámica
+            const interval = setInterval(() => {
+                if (progress < 40) progress += 0.5; // Inicio lento
+                else if (progress < 70) progress += 1.2; // Acelera
+                else if (progress < 95) progress += 2.0; // Salto final rápido
+                else { 
+                    progress = 98; // Espera al servidor
+                    clearInterval(interval); // Deja de sumar
+                }
+                updateManaBar(progress);
+            }, 50);
+        }
+
+        function rotateText() {
+            let index = 0;
+            const changeText = () => {
+                rpgText.classList.remove('visible');
+                setTimeout(() => {
+                    // Aleatoriedad para que no se sienta repetitivo
+                    const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
+                    rpgText.innerText = randomPhrase;
+                    rpgText.classList.add('visible');
+                }, 300);
+            };
+
+            rpgText.classList.add('visible');
+            rpgText.innerText = phrases[0];
+            setInterval(changeText, 1800); // Cambia cada 1.8s
+        }
+
+        uploadForm.addEventListener('submit', function(e) {
+            mainForm.style.opacity = 0; // Ocultar form con fade
+            setTimeout(() => { mainForm.style.display = 'none'; }, 500); // Quitar del layout
+            
+            loadingOverlay.classList.add('active');
+            
+            rotateText();
+            simulateLoading();
         });
     </script>
 </body>
