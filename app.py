@@ -1,139 +1,179 @@
 import os
-import io
+import io  # NECESARIO PARA CSV
 import base64
+import logging
+import csv
+from collections import Counter
 import numpy as np
 import cv2
-from flask import Flask, request, render_template, redirect, url_for, flash
+from flask import Flask, request, render_template, redirect, url_for, flash, jsonify
+from werkzeug.utils import secure_filename
 
+# Importamos tu detector
 from magic_card_detector import MagicCardDetector
 
-# --- Configuration ---
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
-REFERENCE_DB_FILE = 'Script_DB/scryfall_db.sqlite'  # Cambiado para usar SQLite
+# --- 1. Configuración ---
+class Config:
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev_secret_key_change_in_production'
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+    MAX_CONTENT_LENGTH = 64 * 1024 * 1024  # 64 MB
+    REFERENCE_DB_FILE = os.path.join('Script_DB', 'scryfall_db.sqlite')
 
-# --- Flask App Initialization ---
+# --- 2. Logging ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# --- Inicialización ---
 app = Flask(__name__)
-app.secret_key = 'your secret key here' # TBD
+app.config.from_object(Config)
 
-# --- Load MagicCardDetector ONCE ---
-print("Initializing Magic Card Detector...")
-detector = MagicCardDetector()
+# --- 3. Detector Singleton ---
+detector = None
 
-def load_reference_data():
-    """
-    Intenta cargar los datos de referencia desde SQLite, 
-    si no existe, usa el archivo pickle como fallback
-    """
-    # Primero intenta con la base de datos SQLite
-    if os.path.exists(REFERENCE_DB_FILE):
-        try:
-            detector.read_reference_data_from_db(REFERENCE_DB_FILE)
-            print(f"Successfully loaded reference data from {REFERENCE_DB_FILE}")
-            return True
-        except Exception as e:
-            print(f"Error loading from SQLite database: {e}")
-            print("Falling back to pickle file...")
-    
-    # Fallback al archivo pickle
-    pickle_file = 'alpha_reference_phash.dat'
-    if os.path.exists(pickle_file):
-        try:
-            detector.read_prehashed_reference_data(pickle_file)
-            print(f"Successfully loaded reference data from {pickle_file}")
-            return True
-        except Exception as e:
-            print(f"Error loading from pickle file: {e}")
-    
-    print("ERROR: No reference data found!")
-    return False
-def preprocess_image(image_cv):
-    """Mejora la calidad de la imagen para mejor reconocimiento"""
-    # Aumentar contraste
-    lab = cv2.cvtColor(image_cv, cv2.COLOR_BGR2LAB)
-    l, a, b = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
-    l = clahe.apply(l)
-    lab = cv2.merge([l, a, b])
-    image_cv = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-    
-    # Reducir ruido
-    image_cv = cv2.medianBlur(image_cv, 3)
-    
-    return image_cv
-# Cargar datos de referencia
-if not load_reference_data():
-    detector = None  # Deshabilitar detector si no hay datos de referencia
+def get_detector():
+    global detector
+    if detector is not None:
+        return detector
 
-# --- Helper Function ---
+    logger.info("Initializing MagicCardDetector Engine...")
+    if not os.path.exists(app.config['REFERENCE_DB_FILE']):
+        logger.critical(f"Database not found at {app.config['REFERENCE_DB_FILE']}")
+        return None
+
+    try:
+        det_instance = MagicCardDetector()
+        det_instance.read_reference_data_from_db(app.config['REFERENCE_DB_FILE'])
+        logger.info("Detector initialized successfully.")
+        detector = det_instance
+        return detector
+    except Exception as e:
+        logger.error(f"Failed to initialize detector: {e}", exc_info=True)
+        return None
+
+get_detector()
+
+# --- Helpers ---
 def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
-# --- Routes ---
+def process_single_image(file_storage):
+    det = get_detector()
+    if det is None: raise RuntimeError("Detector unavailable.")
+
+    # 1. REBOBINAR ARCHIVO (Corrección Clave)
+    file_storage.seek(0)
+    file_bytes = np.frombuffer(file_storage.read(), np.uint8)
+    
+    if len(file_bytes) == 0: return None, None, []
+
+    img_cv = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+    if img_cv is None: return None, None, []
+
+    filename = secure_filename(file_storage.filename)
+    logger.info(f"Processing image: {filename} | Size: {img_cv.shape}")
+    
+    return det.process_image_data(img_cv, filename)
+
+# --- Rutas ---
 @app.route('/')
 def index():
-    """Serves the main upload page."""
     return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
 def upload_image():
-    """Handles image upload, processing, and displays results."""
-    if detector is None:
-         flash('Card Detector could not be initialized (Reference data missing?). Cannot process image.', 'error')
-         return redirect(url_for('index'))
-
     if 'image_file' not in request.files:
-        flash('No file part in the request.', 'error')
+        flash('No file part', 'error')
+        return redirect(url_for('index'))
+    
+    files = request.files.getlist('image_file')
+    
+    if not files or files[0].filename == '':
+        flash('No image selected.', 'error')
         return redirect(url_for('index'))
 
-    file = request.files['image_file']
+    results_gallery = []
+    total_references = []
+    processed_count = 0
+    errors = []
 
-    if file.filename == '':
-        flash('No image selected for uploading.', 'error')
+    for file in files:
+        if file and allowed_file(file.filename):
+            try:
+                orig_bytes, ann_bytes, card_data_list = process_single_image(file)
+                
+                if orig_bytes is None:
+                    errors.append(f"{file.filename}: Empty/Corrupt")
+                    continue
+
+                # Acumular para CSV
+                for card in card_data_list:
+                    name = card['name'].strip()
+                    set_code = (card['set'] or "??").upper()
+                    lang = (card['lang'] or "EN").upper()
+                    ref_string = f"{name}-{set_code}-{lang}"
+                    total_references.append(ref_string)
+
+                # Guardar Galería
+                orig_b64 = base64.b64encode(orig_bytes).decode('utf-8')
+                res_b64 = base64.b64encode(ann_bytes).decode('utf-8')
+                
+                results_gallery.append({
+                    'original': orig_b64,
+                    'processed': res_b64,
+                    'filename': file.filename
+                })
+                processed_count += 1
+
+            except Exception as e:
+                logger.error(f"Processing error {file.filename}: {e}")
+                errors.append(str(e))
+        else:
+            errors.append(f"{file.filename}: Invalid Type")
+
+    if processed_count == 0:
+        flash(f'No images processed. Errors: {", ".join(errors[:3])}', 'error')
         return redirect(url_for('index'))
 
-    if file and allowed_file(file.filename):
-        try:
-            # Read image file stream into OpenCV
-            filestr = file.read()
-            npimg = np.frombuffer(filestr, np.uint8)
-            img_cv = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
-            
-            if img_cv is None:
-                 flash('Could not decode image. Please upload a valid image file (JPG, PNG).', 'error')
-                 return redirect(url_for('index'))
+    # GENERAR CSV
+    try:
+        total_counts = Counter(total_references)
+        csv_output = io.StringIO()
+        writer = csv.writer(csv_output)
+        writer.writerow(['Referencia', 'Cantidad'])
+        for ref, count in total_counts.items():
+            writer.writerow([ref, count])
+        
+        csv_string = csv_output.getvalue()
+        csv_b64 = base64.b64encode(csv_string.encode('utf-8')).decode('utf-8')
+    except Exception as e:
+        logger.error(f"CSV generation failed: {e}")
+        csv_b64 = None
 
-            print(f"Image '{file.filename}' loaded successfully. Processing...")
+    return render_template('results.html', 
+                           results_gallery=results_gallery,
+                           csv_data=csv_b64,
+                           filename="batch_scan.csv")
 
-            # Process the image using the detector instance
-            # This now returns original_bytes, annotated_bytes
-            original_bytes, annotated_bytes = detector.process_image_data(img_cv, file.filename)
+@app.route('/api/detect', methods=['POST'])
+def api_detect_card():
+    if 'file' not in request.files: return jsonify({'error': 'No file provided'}), 400
+    files = request.files.getlist('file')
+    all_cards_data = []
 
-            print("Processing complete. Encoding images for display...")
+    try:
+        for file in files:
+            if allowed_file(file.filename):
+                _, _, card_data = process_single_image(file)
+                all_cards_data.extend(card_data)
+        
+        return jsonify({
+            'status': 'success',
+            'count': len(all_cards_data),
+            'cards': all_cards_data
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-            # Encode images to Base64 for embedding in HTML
-            original_b64 = base64.b64encode(original_bytes).decode('utf-8') if original_bytes else None
-            result_b64 = base64.b64encode(annotated_bytes).decode('utf-8') if annotated_bytes else None
-
-            # Render the results page
-            return render_template('results.html',
-                                   original_image_b64=original_b64,
-                                   result_image_b64=result_b64)
-
-        except Exception as e:
-            print(f"An error occurred during processing: {e}")
-            import traceback
-            traceback.print_exc() # Print detailed traceback to server console
-            flash(f'An error occurred during processing: {e}', 'error')
-            return redirect(url_for('index'))
-
-    else:
-        flash('Allowed image types are -> png, jpg, jpeg', 'error')
-        return redirect(url_for('index'))
-
-# --- Run the App ---
 if __name__ == "__main__":
-    # Use debug=True only for development
-    # For production, use a proper WSGI server like Gunicorn or Waitress
-    # Example: gunicorn -w 4 app:app
-    app.run(debug=True, host='0.0.0.0', port=5001) # Makes it accessible on your network
+    port = int(os.environ.get('PORT', 5001))
+    app.run(host='0.0.0.0', port=port, debug=True)
