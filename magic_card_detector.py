@@ -1,14 +1,15 @@
 """
 Module for detecting and recognizing Magic: the Gathering cards.
-VERSION: FINAL + TEXT BOX LANGUAGE DETECTION
+VERSION: BATCH READY + CSV DATA
 Features:
 - Vectorized Search (Speed)
-- Robust Segmentation (Accuracy)
-- Advanced Language Detection (Type Line Keywords + Text Box Analysis)
+- Robust Segmentation (Adaptive/Canny/RGB/Center/Full)
+- Advanced Language Detection
+- Returns Structured Data for Aggregation
 """
 
 import os
-import io
+import io  # <--- ESTA ERA LA LÍNEA QUE FALTABA
 import sys
 import sqlite3
 import re 
@@ -21,16 +22,16 @@ from copy import deepcopy
 from itertools import product
 from PIL import Image as PILImage
 
-# --- LIBRERÍA DE DETECCIÓN DE IDIOMA ---
+# --- LIBRERÍA DETECCIÓN IDIOMA ---
 try:
-    from langdetect import detect, DetectorFactory,  LangDetectException
+    from langdetect import detect, DetectorFactory
     DetectorFactory.seed = 0
     LANG_LIB_AVAILABLE = True
 except ImportError:
     LANG_LIB_AVAILABLE = False
-    print("WARNING: 'langdetect' not installed. Run: pip install langdetect")
+    print("WARNING: 'langdetect' not installed.")
 
-# --- CONFIGURACIÓN DE IDIOMAS (Keywords) ---
+# --- CONFIGURACIÓN IDIOMAS ---
 TYPE_LINE_LANGUAGES = {
     'es': ('Criatura', 'Conjuro', 'Instantáneo', 'Instantaneo', 'Tierra', 'Encantamiento', 'Artefacto', 'Legendaria', 'Invocar', 'Interrupción'),
     'en': ('Creature', 'Sorcery', 'Instant', 'Land', 'Enchantment', 'Artifact', 'Legendary', 'Summon', 'Interrupt', 'Enchant', 'Mana Source'),
@@ -40,13 +41,12 @@ TYPE_LINE_LANGUAGES = {
     'pt': ('Criatura', 'Feitiço', 'Mágica Instantânea', 'Terreno', 'Encantamento', 'Artefato', 'Lendária', 'Invocar')
 }
 
-# --- EASYOCR CONFIG ---
+# --- EASYOCR ---
 try:
     import easyocr
     OCR_AVAILABLE = True
     print("EasyOCR detected. Initializing...")
     try:
-        # Cargamos varios idiomas para que el OCR no se vuelva loco con caracteres extraños
         reader = easyocr.Reader(['en', 'es', 'fr', 'it', 'de', 'pt'], gpu=True)
         print("✅ EasyOCR initialized on GPU.")
     except Exception:
@@ -171,6 +171,7 @@ class TestImage:
         self.adjusted = cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
 
     def plot_image_with_recognized(self):
+        # Figura más grande para mejor calidad
         plt.figure(figsize=(12, 8))
         rgb_img = cv2.cvtColor(self.original, cv2.COLOR_BGR2RGB)
         plt.imshow(rgb_img)
@@ -305,7 +306,7 @@ class MagicCardDetector:
         
         any_recognized = False
 
-        # 1. Segmentación
+        # 1. Segmentación (Adaptive -> Canny -> RGB)
         seg_methods = ['adaptive', 'canny', 'rgb']
         for method in seg_methods:
             self.segment_image(test_image, mode=method)
@@ -335,12 +336,25 @@ class MagicCardDetector:
             self.recognize_candidate(cand)
 
         test_image.mark_fragments()
+        # Orden visual de izquierda a derecha
         test_image.candidate_list.sort(key=lambda c: c.center_x())
+
+        # --- DATA COLLECTION FOR CSV ---
+        detected_data = []
+        for cand in test_image.candidate_list:
+            if cand.is_recognized and not cand.is_fragment:
+                detected_data.append({
+                    'name': cand.name,
+                    'set': cand.db_set_code,
+                    'lang': cand.language
+                })
 
         annotated_bytes = test_image.plot_image_with_recognized()
         is_success, buffer = cv2.imencode(".png", test_image.original)
         original_bytes = buffer.tobytes() if is_success else None
-        return original_bytes, annotated_bytes
+        
+        # Return 3 elements: original, processed, data_list
+        return original_bytes, annotated_bytes, detected_data
 
     def is_solid_color(self, image, threshold=15):
         if image.size == 0: return True
@@ -394,19 +408,13 @@ class MagicCardDetector:
         return crops
 
     def detect_language_extended(self, full_card_image):
-        """
-        Intenta detectar el idioma en dos fases:
-        1. Keywords en la línea de tipo (rápido y preciso).
-        2. langdetect en el cuadro de texto (lento pero bueno para textos largos).
-        """
         if not OCR_AVAILABLE: return ""
         h, w = full_card_image.shape[:2]
         
-        # --- FASE 1: Línea de Tipo (Keywords) ---
+        # 1. Keywords (Fast)
         y1_type, y2_type = int(h * 0.56), int(h * 0.64)
         x1_type, x2_type = int(w * 0.05), int(w * 0.95)
         crop_type = full_card_image[y1_type:y2_type, x1_type:x2_type]
-        
         gray_type = cv2.cvtColor(crop_type, cv2.COLOR_BGR2GRAY)
         _, thresh_type = cv2.threshold(gray_type, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
@@ -419,33 +427,24 @@ class MagicCardDetector:
         for lang_code, keywords in TYPE_LINE_LANGUAGES.items():
             for keyword in keywords:
                 if keyword.lower() in type_text:
-                    print(f"  [Lang] Keyword Match: {lang_code.upper()}")
                     return lang_code
         
-        # --- FASE 2: Cuadro de Texto (Library) ---
-        # Si no hay keywords, miramos el texto de reglas
+        # 2. Library Fallback (Slow but robust)
         if LANG_LIB_AVAILABLE:
-            # Crop Text Box (approx 65% to 88% height)
             y1_text, y2_text = int(h * 0.65), int(h * 0.88)
             x1_text, x2_text = int(w * 0.05), int(w * 0.95)
             crop_text = full_card_image[y1_text:y2_text, x1_text:x2_text]
-            
             gray_text = cv2.cvtColor(crop_text, cv2.COLOR_BGR2GRAY)
             _, thresh_text = cv2.threshold(gray_text, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             
             try:
                 results_text = reader.readtext(thresh_text, detail=0)
                 full_text = " ".join(results_text)
-                
-                # langdetect necesita cierto volumen de texto para ser fiable
                 if len(full_text) > 15:
                     lang = detect(full_text)
-                    # Filtramos: Solo aceptamos si es uno de los idiomas de Magic
                     if lang in TYPE_LINE_LANGUAGES.keys():
-                        print(f"  [Lang] Lib Detected: {lang.upper()}")
                         return lang
-            except Exception as e:
-                pass
+            except Exception: pass
 
         return ""
 
@@ -513,10 +512,8 @@ class MagicCardDetector:
         detected_lang = ""
         
         if OCR_AVAILABLE:
-            print(f"  [FAST] Analyzing candidate: {final_ref.name} (Diff: {best_match['diff']})")
+            print(f"  [FAST] Analyzing: {final_ref.name} (Diff: {best_match['diff']})")
             detected_set_code = self.attempt_set_or_year_ocr(best_match['img'])
-            
-            # USAMOS LA NUEVA FUNCIÓN EXTENDIDA
             detected_lang = self.detect_language_extended(best_match['img'])
 
             if detected_set_code:
@@ -524,7 +521,7 @@ class MagicCardDetector:
                     ref = self.reference_images[cand['ref_idx']]
                     if ref.set_code == detected_set_code:
                         final_ref = ref
-                        print(f"  -> Edition Match! Switched to {final_ref.name} ({final_ref.set_code})")
+                        print(f"  -> Edition Match! {final_ref.name} ({final_ref.set_code})")
                         break
 
         candidate.is_recognized = True
@@ -532,7 +529,7 @@ class MagicCardDetector:
         candidate.recognition_score = 100 - best_match['diff']
         candidate.db_set_code = final_ref.set_code
         candidate.set_info = detected_set_code 
-        # FALLBACK IDIOMA: Si tras todo esto sigue vacío, ponemos EN
+        # FALLBACK: Si no se detecta idioma, poner EN
         candidate.language = detected_lang if detected_lang else "en"
         
         print(f"Match Final: {candidate.name} ({candidate.db_set_code})")
