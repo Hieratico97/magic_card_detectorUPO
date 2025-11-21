@@ -45,7 +45,7 @@
             justify-content: center;
             z-index: -1;
             overflow: hidden;
-            opacity: 0.5; /* Más visible para que se vea durante la carga */
+            opacity: 0.5;
         }
 
         .card-wheel {
@@ -124,19 +124,16 @@
 
         p.subtitle { color: #888; margin-bottom: 2rem; font-size: 0.9rem; }
 
-        /* --- CORRECCIÓN: ÁREA DE SUBIDA CENTRADA --- */
         .upload-area {
             border: 2px dashed var(--border);
             border-radius: 16px;
-            padding: 1rem; /* Menos padding interno para dejar espacio a la imagen */
-            height: 300px; /* Altura fija para mantener consistencia */
+            padding: 1rem;
+            height: 300px;
             cursor: pointer;
             transition: all 0.3s ease;
             position: relative;
             background: rgba(0,0,0,0.2);
             overflow: hidden;
-            
-            /* FLEXBOX MAGIA PARA CENTRAR */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -149,7 +146,6 @@
         
         .file-input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 2;}
         
-        /* Imagen centrada y contenida */
         .preview-image { 
             display: none; 
             max-width: 100%; 
@@ -162,10 +158,16 @@
             z-index: 1;
         }
 
-        .placeholder-content {
+        .placeholder-content { text-align: center; z-index: 1; }
+
+        /* Vista previa para múltiples archivos */
+        .multi-file-preview {
+            display: none;
             text-align: center;
             z-index: 1;
         }
+        .multi-icon { font-size: 4rem; margin-bottom: 1rem; }
+        .file-count-text { font-size: 1.5rem; color: var(--primary); font-weight: bold; font-family: 'Cinzel', serif; }
 
         .btn {
             background: var(--primary);
@@ -191,7 +193,7 @@
             color: #ffaaaa; font-size: 0.9rem; display: none;
         }
 
-        /* --- PANTALLA DE CARGA PROFESIONAL --- */
+        /* --- PANTALLA DE CARGA --- */
         .loading-overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -199,11 +201,8 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            
-            /* Fondo semi-transparente para ver la rueda detrás */
             background: rgba(0, 0, 0, 0.7); 
-            backdrop-filter: blur(3px); /* Blur ligero, elegante */
-            
+            backdrop-filter: blur(3px);
             z-index: 20;
             opacity: 0;
             pointer-events: none;
@@ -212,11 +211,10 @@
 
         .loading-overlay.active { opacity: 1; pointer-events: all; }
 
-        /* Barra de carga (Sleek Style) */
         .mana-bar-container {
-            width: 60%; /* Más ancha */
+            width: 60%;
             max-width: 600px;
-            height: 4px; /* Muy fina y elegante */
+            height: 4px;
             background: rgba(255, 255, 255, 0.1);
             border-radius: 2px;
             margin-top: 3rem;
@@ -228,14 +226,14 @@
             height: 100%;
             width: 0%; 
             background: var(--mana-glow);
-            box-shadow: 0 0 15px var(--mana-glow), 0 0 30px var(--mana-glow); /* Resplandor intenso */
+            box-shadow: 0 0 15px var(--mana-glow), 0 0 30px var(--mana-glow);
             transition: width 0.2s ease-out; 
             border-radius: 2px;
         }
 
         .rpg-text {
             font-family: 'Cinzel', serif;
-            font-size: 1.4rem; /* Texto más grande */
+            font-size: 1.4rem;
             color: #fff;
             margin-top: 1.5rem;
             text-shadow: 0 2px 10px rgba(0,0,0,0.8);
@@ -258,12 +256,9 @@
 
     <div class="background-wheel-container">
         <div class="card-wheel" id="cardWheel">
-            <div class="bg-card"></div><div class="bg-card"></div>
-            <div class="bg-card"></div><div class="bg-card"></div>
-            <div class="bg-card"></div><div class="bg-card"></div>
-            <div class="bg-card"></div><div class="bg-card"></div>
-            <div class="bg-card"></div><div class="bg-card"></div>
-            <div class="bg-card"></div><div class="bg-card"></div>
+            <div class="bg-card"></div><div class="bg-card"></div><div class="bg-card"></div><div class="bg-card"></div>
+            <div class="bg-card"></div><div class="bg-card"></div><div class="bg-card"></div><div class="bg-card"></div>
+            <div class="bg-card"></div><div class="bg-card"></div><div class="bg-card"></div><div class="bg-card"></div>
         </div>
     </div>
 
@@ -283,15 +278,20 @@
 
         <form action="/upload" method="post" enctype="multipart/form-data" id="uploadForm">
             <div class="upload-area" id="dropZone">
-                <input type="file" name="image_file" class="file-input" id="fileInput" accept=".png, .jpg, .jpeg">
+                <input type="file" name="image_file" class="file-input" id="fileInput" accept=".png, .jpg, .jpeg" multiple>
                 
                 <div id="placeholderContent" class="placeholder-content">
                     <div class="upload-icon">⚡</div>
-                    <h3>Upload Image</h3>
-                    <p style="font-size: 0.8rem; opacity: 0.7;">Drag & drop or click to browse</p>
+                    <h3>Upload Image(s)</h3>
+                    <p style="font-size: 0.8rem; opacity: 0.7;">Drag & drop single or multiple files</p>
                 </div>
                 
                 <img id="imagePreview" class="preview-image" alt="Preview">
+
+                <div id="multiPreview" class="multi-file-preview">
+                    <div class="multi-icon">📚</div>
+                    <div id="fileCount" class="file-count-text">0 Files Selected</div>
+                </div>
             </div>
             <button type="submit" class="btn" id="submitBtn" disabled>Identify Card</button>
         </form>
@@ -299,7 +299,6 @@
 
     <div class="loading-overlay" id="loadingOverlay">
         <div class="rpg-text" id="rpgText">Initializing...</div>
-        
         <div class="mana-bar-container">
             <div class="mana-bar-fill" id="manaBar"></div>
         </div>
@@ -310,6 +309,8 @@
         const dropZone = document.getElementById('dropZone');
         const preview = document.getElementById('imagePreview');
         const placeholder = document.getElementById('placeholderContent');
+        const multiPreview = document.getElementById('multiPreview');
+        const fileCountText = document.getElementById('fileCount');
         const submitBtn = document.getElementById('submitBtn');
         const uploadForm = document.getElementById('uploadForm');
         const loadingOverlay = document.getElementById('loadingOverlay');
@@ -331,25 +332,41 @@
         // Drag & Drop
         ['dragenter', 'dragover'].forEach(e => dropZone.addEventListener(e, (ev) => { ev.preventDefault(); dropZone.classList.add('dragover'); }));
         ['dragleave', 'drop'].forEach(e => dropZone.addEventListener(e, (ev) => { ev.preventDefault(); dropZone.classList.remove('dragover'); }));
+        
         dropZone.addEventListener('drop', (e) => {
             const dt = e.dataTransfer;
-            fileInput.files = dt.files;
+            fileInput.files = dt.files; // Asignar archivos soltados al input
             handleFiles(dt.files);
         });
+        
         fileInput.addEventListener('change', function() { handleFiles(this.files); });
 
         function handleFiles(files) {
             if (files.length > 0) {
-                const file = files[0];
-                if (!file.type.startsWith('image/')) return;
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    preview.src = e.target.result;
-                    preview.style.display = 'block';
-                    placeholder.style.display = 'none';
-                    submitBtn.disabled = false;
+                // Ocultar placeholder inicial
+                placeholder.style.display = 'none';
+                submitBtn.disabled = false;
+
+                if (files.length === 1) {
+                    // MODO SINGLE: Mostrar preview de imagen
+                    const file = files[0];
+                    if (file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            preview.src = e.target.result;
+                            preview.style.display = 'block';
+                            multiPreview.style.display = 'none'; // Ocultar multi
+                        }
+                        reader.readAsDataURL(file);
+                        submitBtn.innerText = "Identify Card";
+                    }
+                } else {
+                    // MODO MULTIPLE: Mostrar contador
+                    preview.style.display = 'none'; // Ocultar imagen single
+                    multiPreview.style.display = 'block'; // Mostrar bloque multi
+                    fileCountText.innerText = `${files.length} Files Selected`;
+                    submitBtn.innerText = `Identify ${files.length} Cards`;
                 }
-                reader.readAsDataURL(file);
             }
         }
 
@@ -359,15 +376,11 @@
 
         function simulateLoading() {
             let progress = 0;
-            // Lógica de barra de carga dinámica
             const interval = setInterval(() => {
-                if (progress < 40) progress += 0.5; // Inicio lento
-                else if (progress < 70) progress += 1.2; // Acelera
-                else if (progress < 95) progress += 2.0; // Salto final rápido
-                else { 
-                    progress = 98; // Espera al servidor
-                    clearInterval(interval); // Deja de sumar
-                }
+                if (progress < 40) progress += 0.5;
+                else if (progress < 70) progress += 1.2;
+                else if (progress < 95) progress += 2.0;
+                else { progress = 98; clearInterval(interval); }
                 updateManaBar(progress);
             }, 50);
         }
@@ -377,24 +390,20 @@
             const changeText = () => {
                 rpgText.classList.remove('visible');
                 setTimeout(() => {
-                    // Aleatoriedad para que no se sienta repetitivo
                     const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
                     rpgText.innerText = randomPhrase;
                     rpgText.classList.add('visible');
                 }, 300);
             };
-
             rpgText.classList.add('visible');
             rpgText.innerText = phrases[0];
-            setInterval(changeText, 1800); // Cambia cada 1.8s
+            setInterval(changeText, 1800);
         }
 
         uploadForm.addEventListener('submit', function(e) {
-            mainForm.style.opacity = 0; // Ocultar form con fade
-            setTimeout(() => { mainForm.style.display = 'none'; }, 500); // Quitar del layout
-            
+            mainForm.style.opacity = 0;
+            setTimeout(() => { mainForm.style.display = 'none'; }, 500);
             loadingOverlay.classList.add('active');
-            
             rotateText();
             simulateLoading();
         });
