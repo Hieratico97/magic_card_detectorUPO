@@ -16,41 +16,102 @@
             font-family: 'Inter', sans-serif;
             background-color: var(--bg-dark);
             color: var(--text);
-            min-height: 100vh;
+            height: 100vh;
             margin: 0;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
             background-image: radial-gradient(circle at 50% 50%, #1a1a1a 0%, #000 100%);
+            overflow: hidden; /* El body no hace scroll, solo el contenedor */
         }
 
+        /* --- CONTENEDOR PRINCIPAL (LAYOUT FLEX) --- */
         .results-container {
             background: var(--glass);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 24px;
-            padding: 2rem;
+            border-radius: 16px; /* Bordes un poco menos redondeados para look técnico */
             width: 95%;
-            max-width: 1600px; /* Más ancho para aprovechar pantallas grandes */
+            max-width: 1600px;
+            height: 92vh; /* Ocupa casi toda la altura */
             display: flex;
-            flex-direction: column;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
-            animation: slideUp 0.5s ease-out;
+            flex-direction: column; /* Organiza: Título - Contenido - Footer */
+            box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+            animation: fadeIn 0.5s ease-out;
+            position: relative;
+        }
+
+        /* --- 1. CABECERA FIJA --- */
+        .panel-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            flex-shrink: 0; /* No se encoge */
+            text-align: center;
+            background: rgba(0,0,0,0.2);
+            border-radius: 16px 16px 0 0;
         }
 
         h1 {
             font-family: 'Cinzel', serif;
-            text-align: center;
             color: var(--primary);
-            margin: 0 0 1.5rem 0;
-            font-size: 2rem;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            padding-bottom: 1rem;
-            letter-spacing: 2px;
+            margin: 0;
+            font-size: 1.8rem;
+            letter-spacing: 3px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
         }
 
-        /* Grid Layout */
+        /* --- 2. ÁREA DE SCROLL (IMÁGENES) --- */
+        .scrollable-content {
+            flex-grow: 1; /* Ocupa todo el espacio disponible */
+            overflow-y: auto; /* Aquí es donde ocurre el scroll */
+            padding: 2rem 3rem;
+            
+            /* Scrollbar personalizada */
+            scrollbar-width: thin;
+            scrollbar-color: var(--primary) #1a1a1a;
+        }
+
+        /* Estilos de scrollbar para Chrome/Safari */
+        .scrollable-content::-webkit-scrollbar { width: 8px; }
+        .scrollable-content::-webkit-scrollbar-track { background: #111; }
+        .scrollable-content::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+        .scrollable-content::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+
+        /* --- 3. BARRA DE ACCIÓN FIJA (FOOTER) --- */
+        .action-bar {
+            padding: 1.5rem 2rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            background: rgba(10, 10, 10, 0.9); /* Fondo oscuro sólido */
+            display: flex;
+            justify-content: space-between; /* Botones a los extremos */
+            align-items: center;
+            flex-shrink: 0; /* No se encoge */
+            border-radius: 0 0 16px 16px;
+        }
+
+        .stats {
+            color: #666;
+            font-size: 0.9rem;
+            font-family: monospace;
+        }
+
+        /* --- ESTILOS DE LAS CARTAS (Igual que antes) --- */
+        .result-block {
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .result-block:last-child { border-bottom: none; margin-bottom: 0; }
+
+        .file-name {
+            font-size: 0.8rem;
+            color: var(--primary);
+            margin-bottom: 1rem;
+            font-family: monospace;
+            opacity: 0.7;
+        }
+
         .comparison-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -58,196 +119,205 @@
             width: 100%;
         }
 
-        .image-column {
-            display: flex;
-            flex-direction: column;
-        }
-
         .column-title {
             text-align: center;
             color: #888;
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             text-transform: uppercase;
             letter-spacing: 1.5px;
             margin-bottom: 10px;
             font-weight: 600;
         }
 
-        /* --- MARCO DE IMAGEN (FRAME) --- */
         .image-frame {
-            /* Altura Fija: Crucial para la simetría */
-            height: 60vh; 
+            height: 55vh; /* Altura consistente */
             min-height: 400px;
-            
-            background: #050505; /* Casi negro, pero sutilmente más claro para ver el límite */
+            background: #050505; 
             border: 1px solid #333;
-            border-radius: 12px;
+            border-radius: 8px;
             overflow: hidden; 
             position: relative;
-            
-            /* Flexbox para centrar el contenido si la imagen es muy pequeña */
             display: flex; 
             align-items: center;
             justify-content: center;
             box-shadow: inset 0 0 30px rgba(0,0,0,0.8);
         }
 
-        /* --- IMÁGENES --- */
-        /* Regla universal para las imágenes dentro del frame */
-        .fitted-image {
+        .fitted-image, .zoom-image {
             width: 100%;
             height: 100%;
-            object-fit: contain; /* La clave: llena el espacio sin deformar */
+            object-fit: contain; 
             display: block;
         }
 
-        /* --- ZOOM CONTAINER --- */
+        /* Zoom */
         .zoom-wrapper {
             width: 100%;
             height: 100%;
             overflow: hidden;
-            cursor: none; /* Oculta el ratón para inmersión */
+            cursor: none; /* Cursor invisible para inmersión */
             display: flex;
             align-items: center;
             justify-content: center;
         }
-
+        
         .zoom-image {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            display: block;
             will-change: transform;
             transform-origin: center center;
-            transition: none; /* Respuesta instantánea */
+            transition: none; 
         }
+        .zoomed { transform: scale(2.5); }
 
-        .zoomed {
-            transform: scale(2.5); /* Factor de Zoom */
-        }
-
-        /* --- BOTÓN --- */
-        .actions {
-            text-align: center;
-            margin-top: 2rem;
-        }
-
+        /* --- BOTONES --- */
         .btn {
-            background: var(--primary);
-            color: #000;
-            font-weight: 800;
+            background: transparent;
+            color: var(--text);
+            font-weight: 600;
             text-decoration: none;
-            padding: 1rem 4rem;
+            padding: 1rem 2rem;
             border-radius: 4px;
-            display: inline-block;
+            border: 1px solid #444;
             text-transform: uppercase;
-            letter-spacing: 2px;
-            transition: all 0.3s;
-            border: 1px solid var(--primary);
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            min-width: 180px;
+            text-align: center;
         }
 
         .btn:hover {
-            background: transparent;
+            border-color: var(--primary);
             color: var(--primary);
-            box-shadow: 0 0 20px rgba(183, 157, 91, 0.2);
+            box-shadow: 0 0 15px rgba(183, 157, 91, 0.1);
         }
 
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+        /* Botón principal (Descargar) destacado */
+        .btn-primary {
+            background: var(--primary);
+            color: #000;
+            border-color: var(--primary);
+            font-weight: 800;
+        }
+        .btn-primary:hover {
+            background: #d4bd76;
+            color: #000;
+            box-shadow: 0 0 20px rgba(183, 157, 91, 0.4);
         }
 
-        /* Móvil */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.98); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
         @media (max-width: 768px) {
             .comparison-grid { grid-template-columns: 1fr; gap: 1rem; }
             .image-frame { height: 40vh; }
-            .results-container { padding: 1rem; width: 100%; border-radius: 0; height: 100%; }
+            .results-container { width: 100%; height: 100%; border-radius: 0; }
+            .action-bar { flex-direction: column; gap: 1rem; }
+            .btn { width: 100%; }
         }
     </style>
 </head>
 <body>
 
     <div class="results-container">
-        <h1>Detection Analysis</h1>
+        
+        <div class="panel-header">
+            <h1>Detection Analysis</h1>
+        </div>
 
-        <div class="comparison-grid">
-            
-            <div class="image-column">
-                <div class="column-title">Original Source</div>
-                <div class="image-frame">
-                    {% if original_image_b64 %}
-                        <img src="data:image/png;base64,{{ original_image_b64 }}" class="fitted-image" alt="Original">
-                    {% else %}
-                        <p style="color:#666;">No Source</p>
-                    {% endif %}
-                </div>
-            </div>
-
-            <div class="image-column">
-                <div class="column-title" style="color: var(--primary);">Identified Cards (Hover)</div>
-                <div class="image-frame" style="border-color: rgba(183, 157, 91, 0.3);">
-                    {% if result_image_b64 %}
-                        <div class="zoom-wrapper" id="zoomBox">
-                            <img src="data:image/png;base64,{{ result_image_b64 }}" class="zoom-image" id="zoomImg" alt="Processed">
+        <div class="scrollable-content">
+            {% if results_gallery %}
+                {% for item in results_gallery %}
+                <div class="result-block">
+                    <div class="file-name">SOURCE: {{ item.filename }}</div>
+                    
+                    <div class="comparison-grid">
+                        <div class="image-column">
+                            <div class="column-title">Original Source</div>
+                            <div class="image-frame">
+                                <img src="data:image/png;base64,{{ item.original }}" class="fitted-image" alt="Original">
+                            </div>
                         </div>
-                    {% else %}
-                        <p style="color:#666;">Detection Failed</p>
-                    {% endif %}
+
+                        <div class="image-column">
+                            <div class="column-title" style="color: var(--primary);">Identified Cards (Hover to Zoom)</div>
+                            <div class="image-frame" style="border-color: rgba(183, 157, 91, 0.3);">
+                                <div class="zoom-wrapper js-zoom-box">
+                                    <img src="data:image/png;base64,{{ item.processed }}" class="zoom-image js-zoom-img" alt="Processed">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+                {% endfor %}
+            {% else %}
+                <p style="text-align:center; color:#666; margin-top: 20%;">No results available.</p>
+            {% endif %}
+        </div>
+
+        <div class="action-bar">
+            <a href="{{ url_for('index') }}" class="btn">
+                &larr; Scan Another
+            </a>
+
+            <div class="stats">
+                {{ results_gallery|length }} Images Processed
             </div>
 
+            {% if csv_data %}
+                <a href="data:text/csv;base64,{{ csv_data }}" 
+                   download="{{ filename }}" 
+                   class="btn btn-primary">
+                   Download Global CSV
+                </a>
+            {% else %}
+                <button class="btn" disabled style="opacity:0.5; cursor: not-allowed;">No CSV</button>
+            {% endif %}
         </div>
 
-        <div class="actions">
-            <a href="{{ url_for('index') }}" class="btn">Scan Another</a>
-        </div>
     </div>
 
     <script>
-        const zoomBox = document.getElementById('zoomBox');
-        const zoomImg = document.getElementById('zoomImg');
+        // Script de Zoom (Optimizado)
+        const zoomBoxes = document.querySelectorAll('.js-zoom-box');
 
-        if (zoomBox && zoomImg) {
-            zoomBox.addEventListener('mousemove', function(e) {
-                // 1. Coordenadas del rectángulo de la IMAGEN (no del contenedor)
-                const rect = zoomImg.getBoundingClientRect();
+        zoomBoxes.forEach(box => {
+            const img = box.querySelector('.js-zoom-img');
+            
+            box.addEventListener('mousemove', function(e) {
+                const rect = img.getBoundingClientRect();
                 
-                // 2. Verificar si el cursor está DENTRO de la imagen visible
-                // (object-fit: contain deja espacios vacíos, queremos ignorarlos)
+                // Verificar cursor dentro de la IMAGEN (no el borde negro)
                 if (
                     e.clientX >= rect.left && 
                     e.clientX <= rect.right && 
                     e.clientY >= rect.top && 
                     e.clientY <= rect.bottom
                 ) {
-                    // Calcular posición relativa (0 a 100%)
                     const x = ((e.clientX - rect.left) / rect.width) * 100;
                     const y = ((e.clientY - rect.top) / rect.height) * 100;
 
-                    // Mover origen y aplicar zoom
-                    zoomImg.style.transformOrigin = `${x}% ${y}%`;
+                    img.style.transformOrigin = `${x}% ${y}%`;
                     
-                    if (!zoomImg.classList.contains('zoomed')) {
-                        zoomImg.classList.add('zoomed');
+                    if (!img.classList.contains('zoomed')) {
+                        img.classList.add('zoomed');
                     }
                 } else {
-                    // Si salimos de la imagen (al espacio negro), quitar zoom
-                    zoomImg.classList.remove('zoomed');
+                    img.classList.remove('zoomed');
                 }
             });
 
-            zoomBox.addEventListener('mouseleave', function() {
-                zoomImg.classList.remove('zoomed');
-                
-                // Reset suave al centro
+            box.addEventListener('mouseleave', function() {
+                img.classList.remove('zoomed');
+                // Reset suave
                 setTimeout(() => {
-                    zoomImg.style.transition = 'transform 0.3s ease';
-                    zoomImg.style.transformOrigin = 'center center';
-                    // Quitar transición para que el próximo movimiento sea rápido
-                    setTimeout(() => { zoomImg.style.transition = 'none'; }, 300);
+                    img.style.transition = 'transform 0.3s ease';
+                    img.style.transformOrigin = 'center center';
+                    setTimeout(() => { img.style.transition = 'none'; }, 300);
                 }, 50);
             });
-        }
+        });
     </script>
 
 </body>
