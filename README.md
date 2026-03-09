@@ -6,6 +6,18 @@ Si alguna vez te has preguntado cómo tu teléfono o un escáner pueden detectar
 
 ---
 
+## 🌟 Novedades de este Fork (vs Original)
+
+Este proyecto nace como un fork de [tmikonen/magic_card_detector](https://github.com/tmikonen/magic_card_detector), pero ha sido **profundamente reescrito y mejorado** para ser más rápido, preciso y para su uso productivo y educativo. Las principales mejoras implementadas son:
+
+1. **Búsqueda Vectorial Ultrarrápida**: El original iteraba carta por carta para calcular similitudes de hashes de forma secuencial. Aquí hemos vectorizado la base de datos completa de Hashes en matrices booleanas (NumPy), lo que nos permite calcular la *Distancia de Hamming* masivamente ejecutando operaciones matemáticas XOR de forma simultánea e instantánea.
+2. **Base de Datos Robusta (SQLite)**: Se ha abandonado el sistema de archivos simples. Ahora el proyecto interactúa directamente con una base de datos local generada a partir de los datos oficiales de *Scryfall*, haciendo las consultas más seguras y estructuradas.
+3. **Módulo OCR de Idioma y Edición**: Integración nativa con Inteligencia Artificial vía **EasyOCR**. El sistema es capaz de "leer" el set de impresión de la esquina de la carta y deducir el idioma analizando la tipografía de la tarjeta (Ej. *Creature* vs *Criatura*).
+4. **Múltiples Estrategias de Segmentación**: El repositorio original dependía de contornos simples, fallando sobre fondos con mucho ruido. Este fork implementa una cascada de algoritmos: primero intenta Threshold Adaptativo, luego Detección Canny, y luego separación de escalas de colores hasta encontrar la carta.
+5. **Aplicación Web "Batch" y Exportación CSV**: La aplicación Flask embebida ahora maneja las imágenes completamente en memoria (Base64) en lugar de depender del disco duro. Soporta la subida de un ramillete grande de fotos a la vez y agrega todos los resultados en un archivo CSV descargable, automatizando tareas de inventario.
+
+---
+
 ## 🛠️ Herramientas Utilizadas
 
 Este proyecto es un "pipeline" (una línea de montaje) de procesamiento de imágenes. Las principales tecnologías que forman parte de él son:
