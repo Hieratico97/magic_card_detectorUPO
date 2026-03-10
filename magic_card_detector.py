@@ -42,20 +42,30 @@ TYPE_LINE_LANGUAGES = {
     'pt': ('Criatura', 'Feitiço', 'Mágica Instantânea', 'Terreno', 'Encantamento', 'Artefato', 'Lendária', 'Invocar')
 }
 
-# --- EASYOCR ---
+# --- LAZY EASYOCR (CARGA PEREZOSA) ---
+# Evitamos instanciar EasyOCR (que levanta CUDA Torch y bloquea 5 segundos) al iniciar el módulo globalmente.
+OCR_AVAILABLE = False
+_ocr_reader_instance = None
 try:
     import easyocr
     OCR_AVAILABLE = True
-    print("EasyOCR detected. Initializing...")
-    try:
-        reader = easyocr.Reader(['en', 'es', 'fr', 'it', 'de', 'pt'], gpu=True)
-        print("✅ EasyOCR initialized on GPU.")
-    except Exception:
-        print("⚠️ GPU failed. Running on CPU.")
-        reader = easyocr.Reader(['en', 'es', 'fr', 'it', 'de', 'pt'], gpu=False)
 except ImportError:
-    OCR_AVAILABLE = False
-    print("WARNING: 'easyocr' not installed.")
+    print("WARNING: 'easyocr' not installed. OCR fallbacks disabled.")
+
+def get_ocr_reader():
+    """Patrón Singleton de carga on-demand para la neurona de texto OCR."""
+    global _ocr_reader_instance
+    if not OCR_AVAILABLE:
+        return None
+    if _ocr_reader_instance is None:
+        print("Lazy Loading: Initializing EasyOCR context...")
+        try:
+            _ocr_reader_instance = easyocr.Reader(['en', 'es', 'fr', 'it', 'de', 'pt'], gpu=True)
+            print("✅ EasyOCR initialized on GPU.")
+        except Exception:
+            print("⚠️ GPU failed. Running on CPU.")
+            _ocr_reader_instance = easyocr.Reader(['en', 'es', 'fr', 'it', 'de', 'pt'], gpu=False)
+    return _ocr_reader_instance
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
